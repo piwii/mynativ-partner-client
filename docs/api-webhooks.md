@@ -11,7 +11,7 @@ Cette documentation décrit les routes effectivement exposées par ce client et 
 | Administration Partner Desk | `{DESK_URL}/api` | Accès public, sans connexion utilisateur |
 | Réception webhook | `{DESK_URL}/api/webhooks` | `X-token: <jeton webhook enregistré>` |
 
-Les seuls hôtes myNativ acceptés par la configuration sont `https://preprod.mynativ.app`, `https://www.mynativ.app` et `https://mynativ.app`.
+Les seuls hôtes myNativ acceptés par la configuration sont `https://preprod.mynativ.app` et `https://www.mynativ.app`.
 
 Les mutations métier (`POST`, `PUT`) exigent un en-tête `Origin` égal à l’origine de Partner Desk, par exemple `https://desk.example.test`. Les webhooks n’exigent ni session ni `Origin`. Le Bearer myNativ est ajouté côté serveur aux appels vers myNativ.
 
