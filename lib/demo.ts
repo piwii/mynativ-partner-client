@@ -1,6 +1,7 @@
 import { db, saveEvent } from './server';
 import { ApiError, unwrap } from './contracts.mjs';
 import type { Travel } from './types';
+export const demoAbandonReasons = [{ id: 1, label: 'Projet annulé' }, { id: 2, label: 'Budget insuffisant' }, { id: 3, label: 'Autre motif' }];
 export const demoUsers = [{ id: 11, fullname: 'Léa Dubois', email: 'lea@example.test' }, { id: 12, fullname: 'Hugo Petit', email: 'hugo@example.test' }, { id: 13, fullname: 'Nora Moreau', email: 'nora@example.test' }];
 export const demoTrips: Travel[] = [
     { id: 421, commercial_id: 'MAR2026-0421', user_id: null, status: 'NEW', main_traveler: { firstname: 'Camille', lastname: 'Laurent', email: 'camille@example.test' }, travel_detail: 'Nous aimerions découvrir Marrakech puis les montagnes de l’Atlas, avec quelques nuits dans un riad. Nous privilégions les petites adresses et les rencontres locales.', departure_date: '2026-10-18', pax_adults: 2, pax_kids: 0, budget: 4800, is_deposit_paid: false },
@@ -18,6 +19,7 @@ async function trip(id: string): Promise<Travel> { const row = await db().prepar
 export async function seed() { await db().batch(demoTrips.map(t => db().prepare('INSERT OR IGNORE INTO records(key,kind,data) VALUES(?,?,?)').bind('demo:travel:' + t.commercial_id, 'demo:travel', JSON.stringify(t)))); }
 export async function demoRequest(method: string, path: string, body?: Record<string, unknown> | FormData) {
     await seed();
+    if (path === 'statuses/abandoned/reasons') return { data: demoAbandonReasons };
     if (path === 'users')
         return { data: demoUsers };
     if (path === 'travel-requests')
@@ -32,6 +34,21 @@ export async function demoRequest(method: string, path: string, body?: Record<st
             throw new ApiError(422, 'Conseiller inconnu.');
         await db().prepare("UPDATE records SET data=json_set(data,'$.user_id',?) WHERE key=?").bind(user_id, 'demo:travel:' + id).run();
         return { data: await trip(id) };
+    }
+    if (method === 'PUT' && kind === 'abandon') {
+        const data = body as Record<string, unknown>;
+        if (!demoAbandonReasons.some(r => r.id === data.reason_id)) throw new ApiError(422, 'Motif inconnu.');
+        if (!['TO_DISPATCH', 'NEW', 'WAITING_TRAVELER', 'QUOTATION_TO_DO', 'QUOTATION_TO_DO_AGAIN', 'VALIDITY_DATE_EXPIRED', 'DEFERRED'].includes(t.status ?? '')) throw new ApiError(403, 'Ce dossier ne peut pas être abandonné.');
+        await db().prepare('UPDATE records SET data=? WHERE key=?').bind(JSON.stringify({ ...t, status: 'ABANDONED', abandon: data }), 'demo:travel:' + id).run();
+        return { data: await trip(id) };
+    }
+    if (method === 'PUT' && kind === 'quotations') {
+        const quotationId = path.split('/')[3];
+        const quotation = (await all('quotations')).find(q => String(q.id) === quotationId && q.travel_request_id === t.id);
+        if (!quotation) throw new ApiError(404, 'Devis introuvable pour ce dossier.');
+        quotation.active = !quotation.active;
+        await db().prepare('UPDATE records SET data=? WHERE key=?').bind(JSON.stringify(quotation), 'demo:quotations:' + quotationId).run();
+        return { data: quotation };
     }
     if (method === 'GET')
         return { data: (await all(kind)).filter(x => x.travel_request_id === t.id) };

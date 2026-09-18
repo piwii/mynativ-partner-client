@@ -12,11 +12,21 @@ const body=async r=>({status:r.status,data:await r.json()});
 test('API publique : configuration accessible sans session',async()=>{const r=await config.GET();assert.equal(r.status,200);assert.equal('email' in await r.json(),false);});
 test('parcours démo : liste, attribution, devis PDF, proposition, message, événements durables',async()=>{
  const c=await body(await config.GET());assert.equal(c.data.mode,'demo');assert.equal(c.data.hasApiToken,false);
- const list=await body(await req('GET','travel-requests'));assert.equal(list.data.data.length,3);const id=list.data.data[0].commercial_id;
+ const list=await body(await req('GET','travel-requests'));assert.equal(list.data.data.length,3);const id='MAR2026-0421';
  const assignment=await body(await req('PUT','travel-requests/'+id,json('/api/partner/travel-requests/'+id,'PUT',{user_id:11})));assert.equal(assignment.data.data.user_id,11);
  const form=new FormData();Object.entries({travel_name:'Séjour test',price:'2500',expiration_date:'2027-01-01 18:00:00',departure_date:'2027-02-01',return_date:'2027-02-10',pax_adults:'2',pax_kids:'0'}).forEach(([k,v])=>form.set(k,v));form.set('quotation',new File(['%PDF-1.4\n%%EOF'],'test.pdf',{type:'application/pdf'}));
  const upload=await body(await req('POST','travel-requests/'+id+'/quotations',new Request(origin+'/api/partner/travel-requests/'+id+'/quotations',{method:'POST',headers:{origin},body:form})));assert.equal(upload.status,200);assert.equal(upload.data.data.travel_name,'Séjour test');
  const q=await body(await req('GET','travel-requests/'+id+'/quotations'));assert.equal(q.data.data.length,1);assert.equal(q.data.data[0].price,2500);
+ const togglePath='travel-requests/'+id+'/quotations/'+q.data.data[0].id+'/toggle';
+ for(const active of [false,true]) { const result=await body(await req('PUT',togglePath,new Request(origin+'/api/partner/'+togglePath,{method:'PUT',headers:{origin}})));assert.equal(result.status,200);assert.equal(result.data.data.active,active);assert.equal((await body(await req('GET','travel-requests/'+id+'/quotations'))).data.data[0].active,active); }
+ const wrongPath='travel-requests/JPN2026-0186/quotations/'+q.data.data[0].id+'/toggle';
+ assert.equal((await req('PUT',wrongPath,new Request(origin+'/api/partner/'+wrongPath,{method:'PUT',headers:{origin}}))).status,404);
+ const reasons=await body(await req('GET','statuses/abandoned/reasons'));assert.ok(reasons.data.data.length);
+ const abandonPath='travel-requests/'+id+'/abandon';
+ for(const payload of [{reason_id:999,reason_description:'Projet annulé'},{reason_id:1,reason_description:'x'},{reason_id:1}])assert.equal((await req('PUT',abandonPath,json('/api/partner/'+abandonPath,'PUT',payload))).status,422);
+ assert.equal((await req('PUT',abandonPath,json('/api/partner/'+abandonPath,'PUT',{reason_id:reasons.data.data[0].id,reason_description:'Projet annulé'}))).status,200);
+ assert.equal((await body(await req('GET','travel-requests/'+id))).data.data.status,'ABANDONED');
+ assert.equal((await req('PUT',abandonPath,json('/api/partner/'+abandonPath,'PUT',{reason_id:1,reason_description:'Projet annulé'}))).status,403);
  const prop=new FormData();Object.entries({message:'Une nuit supplémentaire',price:'200',price_mode:'modification',expiration_date:'2027-01-01 18:00:00'}).forEach(([k,v])=>prop.set(k,v));prop.set('quotation',new File(['%PDF-1.4\n%%EOF'],'change.pdf',{type:'application/pdf'}));assert.equal((await req('POST','travel-requests/'+id+'/propositions',new Request(origin+'/api/partner/travel-requests/'+id+'/propositions',{method:'POST',headers:{origin},body:prop}))).status,200);
  assert.equal((await req('POST','travel-requests/'+id+'/messages',json('/api/partner/travel-requests/'+id+'/messages','POST',{consultant_id:11,message:'Bonjour Camille'}))).status,200);
  assert.equal((await body(await req('GET','travel-requests/'+id+'/messages'))).data.data.length,1);
@@ -40,6 +50,14 @@ test('webhooks réels : authentification, dédoublonnage, nouveau statut, sépar
 test('proxy réel : Bearer serveur, pagination, multipart intact, erreur Laravel conservée',async()=>{
  const original=globalThis.fetch;const calls=[];globalThis.fetch=async(url,init)=>{calls.push({url,init});if(String(url).endsWith('/messages'))return Response.json({message:'Données invalides',errors:{consultant_id:['Conseiller incorrect']}},{status:422});if(init.body instanceof ReadableStream){const f=await new Request(url,{method:'POST',headers:init.headers,body:init.body,duplex:'half'}).formData();assert.equal(f.get('quotation').name,'real.pdf');assert.equal(await f.get('quotation').text(),'%PDF-1.4\n%%EOF');}return Response.json({data:[]});};
  try{const r=await body(await req('GET','travel-requests'));assert.equal(r.status,200);assert.match(calls[0].url,/api\/v1\/connectors\/travel-requests\?page=1&per_page=20&sort=-created_at/);assert.equal(calls[0].init.headers.Authorization,'Bearer api-secret');assert.equal(calls[0].init.redirect,'manual');
+ await req('GET','statuses/abandoned/reasons');assert.ok(calls.at(-1).url.endsWith('/statuses/abandoned/reasons'));
+ const abandonPath='travel-requests/MAR2026-0421/abandon';
+ assert.equal((await req('PUT',abandonPath,json('/api/partner/'+abandonPath,'PUT',{reason_id:2,reason_description:'Budget insuffisant',user_id:12}))).status,200);
+ assert.equal(calls.at(-1).init.method,'PUT');assert.deepEqual(JSON.parse(calls.at(-1).init.body),{reason_id:2,reason_description:'Budget insuffisant'});
+ const togglePath='travel-requests/MAR2026-0421/quotations/12/toggle';
+ assert.equal((await req('PUT',togglePath,new Request(origin+'/api/partner/'+togglePath,{method:'PUT',headers:{origin}}))).status,200);
+ assert.ok(calls.at(-1).url.endsWith('/quotations/12/toggle'));assert.equal(calls.at(-1).init.body,undefined);
+ assert.equal((await req('PUT',togglePath)).status,403);
  const f=new FormData();f.set('price','3000');f.set('quotation',new File(['%PDF-1.4\n%%EOF'],'real.pdf',{type:'application/pdf'}));assert.equal((await req('POST','travel-requests/MAR2026-0421/quotations',new Request(origin+'/api/partner/travel-requests/MAR2026-0421/quotations',{method:'POST',headers:{origin},body:f}))).status,200);
  const bad=await body(await req('POST','travel-requests/MAR2026-0421/messages',json('/api/partner/travel-requests/MAR2026-0421/messages','POST',{consultant_id:11,message:'Bonjour'})));assert.equal(bad.status,422);assert.deepEqual(bad.data.errors,{consultant_id:['Conseiller incorrect']});
  }finally{globalThis.fetch=original;}

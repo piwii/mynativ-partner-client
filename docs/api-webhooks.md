@@ -26,6 +26,9 @@ Les chemins suivants sont relatifs à `/api/partner` dans Partner Desk et à `/a
 | GET | `/users` | Aucun paramètre transmis | Liste des conseillers |
 | GET | `/travel-requests` | `page`, entier ≥ 1, défaut `1` | Liste paginée des dossiers |
 | GET | `/travel-requests/{commercial_id}` | Identifiant commercial | Détail du dossier |
+| GET | `/statuses/abandoned/reasons` | — | Motifs disponibles (`data`: objets `id`, `label`) |
+| PUT | `/travel-requests/{commercial_id}/abandon` | JSON `reason_id`, `reason_description` | Abandon du dossier |
+| PUT | `/travel-requests/{commercial_id}/quotations/{quotation}/toggle` | Aucun corps | Inversion du champ `active` du devis |
 | PUT | `/travel-requests/{commercial_id}` | JSON `user_id` | Attribution d’un conseiller |
 | GET | `/travel-requests/{commercial_id}/messages` | — | Historique des messages |
 | POST | `/travel-requests/{commercial_id}/messages` | JSON `consultant_id`, `message` | Message créé |
@@ -346,3 +349,17 @@ Le fetch amont dispose d’un délai de 45 secondes. Le proxy ne réessaie pas a
 - [Tests de contrats](../test/contracts.test.mjs) et [tests d’intégration](../test/integration.test.mjs)
 
 Les tests utilisent SQLite et un transport myNativ simulé. Pour confirmer le contrat de production, confronter ces exemples aux ressources et validations du backend déployé, puis tester les quatre événements sur un environnement de préproduction. Les références backend historiques sont regroupées dans le [README](../README.md#sources-du-contrat).
+
+### Abandon et activation des devis
+
+Le formulaire d’abandon charge les motifs à l’ouverture et exige une description de 3 à 1 000 caractères. Exemple de corps :
+
+```json
+{"reason_id": 1, "reason_description": "Le voyageur a annulé son projet."}
+```
+
+L’identifiant doit provenir de `GET /statuses/abandoned/reasons`. myNativ vérifie les permissions et le statut du dossier et peut refuser l’abandon avec un HTTP 403. Le dossier retourné est une ressource `TravelRequestResource`.
+
+Le bouton Activer/Désactiver envoie un PUT sans corps puis recharge les devis. L’API inverse `active` et retourne une ressource `QuotationResource` : ne pas relancer automatiquement cette mutation après une erreur réseau, vérifier d’abord l’état du devis.
+
+En démo, les motifs sont fictifs ; l’abandon et le basculement sont conservés dans la base locale. Les contrats ont été vérifiés dans le code backend local (`AbandonTravelRequestRequest`, `TravelRequestController`, `TravelRequestQuotationController`, `AbandonReasonResource`) ; les tests du proxy utilisent un serveur simulé, sans mutation sur myNativ distant.

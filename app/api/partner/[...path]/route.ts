@@ -1,6 +1,6 @@
 import { settings, upstream, json, failure } from '@/lib/server';
 import { demoRequest } from '@/lib/demo';
-import { routeAllowed, ApiError, checkOrigin, readJson, validateAssignment, validateMessage, uploadStream } from '@/lib/contracts.mjs';
+import { routeAllowed, ApiError, checkOrigin, readJson, validateAssignment, validateAbandon, validateMessage, uploadStream } from '@/lib/contracts.mjs';
 async function handle(r: Request, { params }: {
     params: Promise<{
         path: string[];
@@ -17,8 +17,8 @@ async function handle(r: Request, { params }: {
         let data: Record<string, unknown> | FormData | undefined;
         let body: BodyInit | undefined;
         const headers: Record<string, string> = {};
-        if (r.method === 'PUT' || (r.method === 'POST' && path.endsWith('/messages'))) {
-            data = r.method === 'PUT' ? validateAssignment(await readJson(r)) : validateMessage(await readJson(r));
+        if ((r.method === 'PUT' && !path.endsWith('/toggle')) || (r.method === 'POST' && path.endsWith('/messages'))) {
+            data = r.method === 'PUT' ? (path.endsWith('/abandon') ? validateAbandon(await readJson(r)) : validateAssignment(await readJson(r))) : validateMessage(await readJson(r));
             body = JSON.stringify(data);
             headers['Content-Type'] = 'application/json';
         }
