@@ -1,7 +1,6 @@
-import { requireOwner, settings, upstream, json, failure } from '@/lib/server';
+import { settings, upstream, json, failure } from '@/lib/server';
 import { checkOrigin, ApiError } from '@/lib/contracts.mjs';
 export async function POST(r: Request) { try {
-    await requireOwner();
     checkOrigin(r);
     const response = await upstream(await settings(), 'users');
     if (!response.ok)

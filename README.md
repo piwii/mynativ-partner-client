@@ -25,8 +25,8 @@ Voir la [référence API et webhooks](docs/api-webhooks.md) : endpoints, authent
 - D1 : configuration chiffrée, données de démonstration et événements reçus.
 - Les fichiers réels sont transmis en streaming à myNativ. Le client ne conserve pas de copie des PDF. En démo, seuls les métadonnées du devis sont conservées.
 - Aucun jeton myNativ dans le code, les ressources publiques ou le stockage du navigateur.
-- Authentification ChatGPT fournie par le dispatcher Sites, puis liste d’adresses autorisées vérifiée côté serveur.
-- Site public nécessaire pour les webhooks : la page anonyme affiche uniquement la connexion ; toutes les API privées contrôlent l’identité et l’autorisation.
+- Accès public à l’interface et aux API métier, sans connexion utilisateur.
+- Les webhooks utilisent un jeton dédié ; les appels myNativ utilisent le jeton API conservé côté serveur.
 
 ## État de livraison
 
@@ -48,7 +48,6 @@ cp .env.example .env
 Renseigner `.env` :
 
 - `ENCRYPTION_KEY` : 64 caractères hexadécimaux aléatoires, soit 32 octets. Génération : `python3 -c 'import secrets; print(secrets.token_hex(32))'`.
-- `ALLOWED_EMAILS` : `seedy@sites.test` pour l’authentification simulée du serveur local Sites. En hébergement, conserver uniquement les comptes réels autorisés.
 
 ```sh
 npm run db:generate
@@ -64,7 +63,7 @@ node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1
 npm run dev
 ```
 
-Ouvrir l’URL affichée. Le lien « Se connecter avec ChatGPT » utilise l’authentification de développement Sites sur localhost.
+Ouvrir l’URL affichée : l’espace partenaire est accessible directement, sans connexion.
 
 ## Connexion réelle
 
@@ -110,13 +109,13 @@ npm run build
 
 Les tests d’intégration remplacent uniquement les bindings de plateforme et le transport externe : ils exécutent les handlers de l’application contre SQLite en mémoire. Aucun appel myNativ réel. Le compilateur TypeScript du projet est utilisé par le loader de test.
 
-Tests couverts : refus d’accès anonyme et hors liste, routes autorisées, attribution, PDF, messages, propositions, simulations, chiffrement, absence de restitution des secrets, `X-token`, dédoublonnage, changement de statut, séparation démo/réel, pagination et transmission multipart avec Bearer serveur, erreurs Laravel, origines, hôtes et limites de taille.
+Tests couverts : accès sans session, routes autorisées, attribution, PDF, messages, propositions, simulations, chiffrement, absence de restitution des secrets, `X-token`, dédoublonnage, changement de statut, séparation démo/réel, pagination et transmission multipart avec Bearer serveur, erreurs Laravel, origines, hôtes et limites de taille.
 
 ## Publication Sites
 
-Réutiliser le `project_id` de `.openai/hosting.json`, sans recréer de site. Bindings : `DB`, aucun R2. Conserver `ENCRYPTION_KEY` et `ALLOWED_EMAILS` dans les variables d’hébergement, jamais dans le manifeste.
+Réutiliser le `project_id` de `.openai/hosting.json`, sans recréer de site. Bindings : `DB`, aucun R2. Conserver `ENCRYPTION_KEY` dans les variables d’hébergement, jamais dans le manifeste.
 
-Après installation, migrations et compilation réussies : pousser les sources exactes, sauvegarder la version compilée et la publier. L’accès plateforme doit être public pour que myNativ puisse appeler les webhooks ; l’application continue de refuser les API métier à toute personne hors `ALLOWED_EMAILS`. Ne pas remplacer cette vérification par une simple connexion ChatGPT.
+Après installation, migrations et compilation réussies : pousser les sources exactes, sauvegarder la version compilée et la publier. L’accès plateforme et les API métier sont publics, sans connexion utilisateur. Les webhooks restent protégés par leur jeton dédié.
 
 Le chemin de publication reste celui des skills Sites du projet. Les credentials du dépôt source sont temporaires et ne sont pas stockés dans ce projet.
 

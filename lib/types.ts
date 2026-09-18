@@ -61,5 +61,4 @@ export type ConfigView = {
     baseUrl: string;
     hasApiToken: boolean;
     hasWebhookToken: boolean;
-    email: string;
 };

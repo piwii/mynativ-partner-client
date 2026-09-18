@@ -1,7 +1,5 @@
-import {DatabaseSync} from 'node:sqlite';import {AsyncLocalStorage} from 'node:async_hooks';
+import {DatabaseSync} from 'node:sqlite';
 const sqlite=new DatabaseSync(':memory:');
 sqlite.exec(`CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT NOT NULL); CREATE TABLE records(key TEXT PRIMARY KEY,kind TEXT NOT NULL,data TEXT NOT NULL); CREATE TABLE events(id TEXT PRIMARY KEY,event_type TEXT NOT NULL,commercial_id TEXT,travel_id INTEGER,payload TEXT NOT NULL,received_at TEXT NOT NULL,source TEXT NOT NULL);`);
 class Prepared {constructor(sql){this.sql=sql;this.args=[];}bind(...args){this.args=args;return this;}async first(){return sqlite.prepare(this.sql).get(...this.args)??null;}async all(){return {results:sqlite.prepare(this.sql).all(...this.args)};}async run(){const result=sqlite.prepare(this.sql).run(...this.args);return {meta:{changes:Number(result.changes)}};}}
-export const env={DB:{prepare:sql=>new Prepared(sql),batch:async statements=>{sqlite.exec('BEGIN');try{const result=[];for(const s of statements)result.push(await s.run());sqlite.exec('COMMIT');return result;}catch(e){sqlite.exec('ROLLBACK');throw e;}}},ENCRYPTION_KEY:'a'.repeat(64),ALLOWED_EMAILS:'owner@example.test'};
-export const context=new AsyncLocalStorage();export async function headers(){return context.getStore()??new Headers();}export function redirect(url){throw new Error('REDIRECT '+url);}
-export function asOwner(fn){return context.run(new Headers({'oai-authenticated-user-id':'owner-id','oai-authenticated-user-email':'owner@example.test'}),fn);}
+export const env={DB:{prepare:sql=>new Prepared(sql),batch:async statements=>{sqlite.exec('BEGIN');try{const result=[];for(const s of statements)result.push(await s.run());sqlite.exec('COMMIT');return result;}catch(e){sqlite.exec('ROLLBACK');throw e;}}},ENCRYPTION_KEY:'a'.repeat(64)};

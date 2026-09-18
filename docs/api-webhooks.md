@@ -7,13 +7,13 @@ Cette documentation décrit les routes effectivement exposées par ce client et 
 | Interface | URL de base | Authentification |
 | --- | --- | --- |
 | API myNativ appelée par le serveur | `{MYNATIV_URL}/api/v1/connectors` | `Authorization: Bearer <jeton partenaire>` |
-| Proxy métier Partner Desk | `{DESK_URL}/api/partner` | Session ChatGPT Sites et adresse dans `ALLOWED_EMAILS` |
-| Administration Partner Desk | `{DESK_URL}/api` | Même session et autorisation |
+| Proxy métier Partner Desk | `{DESK_URL}/api/partner` | Accès public, sans connexion utilisateur |
+| Administration Partner Desk | `{DESK_URL}/api` | Accès public, sans connexion utilisateur |
 | Réception webhook | `{DESK_URL}/api/webhooks` | `X-token: <jeton webhook enregistré>` |
 
 Les seuls hôtes myNativ acceptés par la configuration sont `https://preprod.mynativ.app`, `https://www.mynativ.app` et `https://mynativ.app`.
 
-Les mutations privées (`POST`, `PUT`) exigent un en-tête `Origin` égal à l’origine de Partner Desk, par exemple `https://desk.example.test`. Les webhooks n’exigent ni session ni `Origin`. Un Bearer myNativ ne permet pas de s’authentifier auprès des routes privées du client.
+Les mutations métier (`POST`, `PUT`) exigent un en-tête `Origin` égal à l’origine de Partner Desk, par exemple `https://desk.example.test`. Les webhooks n’exigent ni session ni `Origin`. Le Bearer myNativ est ajouté côté serveur aux appels vers myNativ.
 
 Le serveur ajoute `Accept: application/json` et le Bearer aux appels myNativ. Les secrets sont conservés chiffrés en base et ne sont jamais retournés par l’API de configuration. Les réponses des handlers portent `Cache-Control: no-store` et `X-Content-Type-Options: nosniff`.
 

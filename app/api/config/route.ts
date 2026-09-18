@@ -1,15 +1,13 @@
-import { requireOwner, settings, saveSettings, json, failure } from '@/lib/server';
+import { settings, saveSettings, json, failure } from '@/lib/server';
 import { ApiError, checkOrigin, readJson, safeBase } from '@/lib/contracts.mjs';
 export async function GET() { try {
-    const u = await requireOwner();
     const c = await settings();
-    return json({ mode: c.mode, baseUrl: c.baseUrl, hasApiToken: !!c.apiToken, hasWebhookToken: !!c.webhookToken, email: u.email });
+    return json({ mode: c.mode, baseUrl: c.baseUrl, hasApiToken: !!c.apiToken, hasWebhookToken: !!c.webhookToken });
 }
 catch (e) {
     return failure(e);
 } }
 export async function PUT(r: Request) { try {
-    await requireOwner();
     checkOrigin(r);
     const v = await readJson(r);
     if (!['demo', 'live'].includes(v.mode))

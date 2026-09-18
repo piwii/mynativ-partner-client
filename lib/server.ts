@@ -1,18 +1,13 @@
 import { env } from 'cloudflare:workers';
-import { getChatGPTUser } from '@/app/chatgpt-auth';
 import { ApiError, secureEqual, eventKey, eventReference } from './contracts.mjs';
 import type { Settings } from './types';
 type Runtime = {
     DB?: D1Database;
     ENCRYPTION_KEY?: string;
-    ALLOWED_EMAILS?: string;
 };
 export const runtime = () => env as Runtime;
 export function db() { const d = runtime().DB; if (!d)
     throw new ApiError(503, 'Le stockage est temporairement indisponible.'); return d; }
-export async function requireOwner() { const user = await getChatGPTUser(); if (!user)
-    throw new ApiError(401, 'Connectez-vous avec ChatGPT pour accéder à cet espace.'); const allow = (runtime().ALLOWED_EMAILS ?? '').split(',').map(x => x.trim().toLowerCase()); if (!allow.includes(user.email.toLowerCase()))
-    throw new ApiError(403, 'Ce compte n’a pas accès à cet espace partenaire.'); return user; }
 export function json(data: unknown, status = 200) { return Response.json(data, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } }); }
 export function failure(e: unknown) { if (e instanceof ApiError)
     return json({ message: e.message, errors: e.errors }, e.status); console.error('Partner Desk:', e instanceof Error ? e.name : 'UnknownError'); return json({ message: 'Le service est temporairement indisponible. Réessayez.' }, 503); }

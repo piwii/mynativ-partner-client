@@ -1,4 +1,4 @@
-import { requireOwner, settings, upstream, json, failure } from '@/lib/server';
+import { settings, upstream, json, failure } from '@/lib/server';
 import { demoRequest } from '@/lib/demo';
 import { routeAllowed, ApiError, checkOrigin, readJson, validateAssignment, validateMessage, uploadStream } from '@/lib/contracts.mjs';
 async function handle(r: Request, { params }: {
@@ -7,7 +7,6 @@ async function handle(r: Request, { params }: {
     }>;
 }) {
     try {
-        await requireOwner();
         const { path: parts } = await params;
         const path = parts.join('/');
         if (!routeAllowed(r.method, path))

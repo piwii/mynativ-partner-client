@@ -54,7 +54,7 @@ function PlainMessage({ message }: {
     message: Message;
 }) { const raw = String(message.message ?? message.content ?? message.body ?? ''); return <p className="message-text">{raw.replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n').replace(/<[^>]*>/g, '')}</p>; }
 export default function Desk() {
-    const [config, setConfig] = useState<ConfigView | null>(null), [session, setSession] = useState<'loading' | 'ready' | 'login' | 'denied' | 'error'>('loading');
+    const [config, setConfig] = useState<ConfigView | null>(null), [session, setSession] = useState<'loading' | 'ready' | 'error'>('loading');
     const [trips, setTrips] = useState<Travel[]>([]), [users, setUsers] = useState<User[]>([]), [selected, setSelected] = useState(''), [trip, setTrip] = useState<Travel | null>(null), [quotes, setQuotes] = useState<Quotation[]>([]), [messages, setMessages] = useState<Message[]>([]), [events, setEvents] = useState<Event[]>([]);
     const [tab, setTab] = useState('overview'), [modal, setModal] = useState(''), [busy, setBusy] = useState(false), [loading, setLoading] = useState(false), [detailLoading, setDetailLoading] = useState(false), [error, setError] = useState(''), [formError, setFormError] = useState(''), [resourceErrors, setResourceErrors] = useState<Record<string, string>>({}), [page, setPage] = useState(1), [lastPage, setLastPage] = useState(1);
     const [mode, setMode] = useState('demo'), [base, setBase] = useState('https://preprod.mynativ.app'), [priceMode, setPriceMode] = useState('modification'), [consultant, setConsultant] = useState(''), [draft, setDraft] = useState(''), [eventType, setEventType] = useState('new-request');
@@ -115,14 +115,8 @@ export default function Desk() {
     catch (e) {
         if (!active)
             return;
-        if (e instanceof HttpError && e.status === 401)
-            setSession('login');
-        else if (e instanceof HttpError && e.status === 403)
-            setSession('denied');
-        else {
-            setSession('error');
-            setError(e instanceof Error ? e.message : 'Connexion indisponible.');
-        }
+        setSession('error');
+        setError(e instanceof Error ? e.message : 'Connexion indisponible.');
     } })(); return () => { active = false; }; }, []);
     useEffect(() => { if (session === 'ready')
         void loadDetail(selected); setDraft(''); }, [selected, session]);
@@ -231,7 +225,7 @@ export default function Desk() {
     const unpaid = trip?.is_deposit_paid;
     const user = users.find(u => u.id === trip?.user_id);
     return <main className="desk"><Toaster richColors position="bottom-right"/><header className="topbar"><a className="brand" href="/"><span className="mark"><Waypoints size={23}/></span><strong>myNativ<span>Partner Desk</span></strong></a><span className="workspace">ESPACE PARTENAIRE</span>{session === 'ready' && <Button variant="outline" onClick={() => open('settings')}><Settings2 /> Connexion</Button>}</header>
- {session !== 'ready' ? <div className="access-panel"><LockKeyhole size={32}/><h1>{session === 'loading' ? 'Ouverture de votre espace…' : session === 'denied' ? 'Accès réservé' : 'Votre espace partenaire'}</h1><p>{session === 'denied' ? 'Connectez-vous avec le compte autorisé pour consulter les dossiers.' : session === 'error' ? error : 'Connectez-vous pour accéder aux dossiers, aux devis et aux échanges avec les voyageurs.'}</p>{session !== 'loading' && <a className="signin" href={session === 'denied' ? '/signout-with-chatgpt?return_to=/' : '/signin-with-chatgpt?return_to=/'} target="_top">{session === 'denied' ? 'Changer de compte' : 'Se connecter avec ChatGPT'} <ArrowUpRight size={16}/></a>}{session === 'error' && <Button variant="outline" onClick={() => location.reload()}>Réessayer</Button>}</div> : <>
+ {session !== 'ready' ? <div className="access-panel"><Waypoints size={32}/><h1>{session === 'loading' ? 'Ouverture de votre espace…' : 'Espace indisponible'}</h1>{session === 'error' && <><p>{error}</p><Button variant="outline" onClick={() => location.reload()}>Réessayer</Button></>}</div> : <>
  <div className={'demo-banner ' + (config?.mode === 'live' ? 'live-banner' : '')}><span>{config?.mode === 'demo' ? 'ENVIRONNEMENT DÉMO' : config?.baseUrl.includes('preprod') ? 'MYNATIV · PRÉPRODUCTION' : 'MYNATIV · PRODUCTION'}</span>{config?.mode === 'demo' ? 'Des dossiers fictifs pour essayer chaque parcours.' : 'Les actions sont transmises à votre environnement myNativ.'}<span className="banner-end">{config?.mode === 'demo' ? 'Aucune action sur myNativ' : 'Connexion serveur sécurisée'} <LockKeyhole size={14}/></span></div>
  <section className="heading"><div><p className="eyebrow">DU PREMIER CONTACT AU DÉPART</p><h1>Vos voyages, au même endroit.</h1><p className="muted">Suivez les demandes et faites avancer chaque dossier.</p></div><Button variant="outline" onClick={refresh} disabled={loading}><RefreshCw size={16} className={loading ? 'spin' : ''}/> Actualiser</Button></section>
  {error && <div role="alert" className="error-box"><CircleAlert size={18}/>{error}</div>}
@@ -261,7 +255,7 @@ export default function Desk() {
                 p = JSON.parse(ev.payload);
             }
             catch { } return <article key={ev.id}><span className="timeline-icon">{ev.event_type === 'payment' ? <CreditCard size={16}/> : ev.event_type === 'message' ? <MessageSquare size={16}/> : <Waypoints size={16}/>}</span><div><strong>{eventLabels[ev.event_type] ?? ev.event_type}</strong><p>{new Date(ev.received_at).toLocaleString('fr-FR')}{p.status ? ' · ' + (statusLabels[String(p.status)] ?? String(p.status)) : ''}{p.amount ? ' · ' + euros(Number(p.amount)) : ''}</p><details><summary>Voir les données reçues</summary><pre>{JSON.stringify(p, null, 2)}</pre></details></div></article>; })}</div>}{config?.mode === 'demo' && <div className="simulation"><FlaskConical size={20}/><div><h3>Essayer un événement entrant</h3><p>Cette simulation reste dans votre démonstration.</p><Choice label="Événement" name="event" value={eventType} onChange={setEventType} items={Object.entries(eventLabels).map(([value, label]) => ({ value, label }))}/><Button variant="outline" disabled={busy} onClick={simulate}>Simuler la réception</Button></div></div>}</TabsContent></Tabs></>}</section></div>
- <footer>myNativ <span>↔</span> Partner Desk <span className="footer-right">{config?.email} · <a href="/signout-with-chatgpt?return_to=/" target="_top">Déconnexion</a></span></footer>
+ <footer>myNativ <span>↔</span> Partner Desk</footer>
  </>}
  <Dialog open={!!modal} onOpenChange={v => { if (!busy && !v) {
         setModal('');
