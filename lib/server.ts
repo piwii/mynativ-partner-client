@@ -30,7 +30,10 @@ export async function authenticateWebhook(request: Request, config: Settings) { 
 export async function saveEvent(type: string, payload: Record<string, unknown>, source = 'live') { const id = await eventKey(type, payload); const ref = eventReference(type, payload); const r = await db().prepare('INSERT OR IGNORE INTO events(id,event_type,commercial_id,travel_id,payload,received_at,source) VALUES(?,?,?,?,?,?,?)').bind(source + ':' + id, type, ref.commercial_id, ref.travel_id, JSON.stringify(payload), new Date().toISOString(), source).run(); return { id: source + ':' + id, duplicate: r.meta.changes === 0 }; }
 export async function upstream(config: Settings, path: string, init: RequestInit = {}) { if (!config.apiToken)
     throw new ApiError(409, 'Ajoutez votre jeton API dans Connexion.'); try {
-    return await fetch(config.baseUrl + '/api/v1/connectors/' + path, { ...init, redirect: 'error', headers: { Accept: 'application/json', Authorization: 'Bearer ' + config.apiToken, ...init.headers }, signal: AbortSignal.timeout(45000) });
+    const response = await fetch(config.baseUrl + '/api/v1/connectors/' + path, { ...init, redirect: 'manual', headers: { Accept: 'application/json', Authorization: 'Bearer ' + config.apiToken, ...init.headers }, signal: AbortSignal.timeout(45000) });
+    if (response.status >= 300 && response.status < 400)
+        throw new ApiError(502, 'myNativ a renvoyé une redirection inattendue. Vérifiez l’adresse de connexion.');
+    return response;
 }
 catch (e) {
     if (e instanceof ApiError)
