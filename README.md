@@ -2,6 +2,10 @@
 
 Mini-client web partenaire dans un projet indépendant. Interface française, adaptée au mobile, avec démonstration persistante et connexion réelle à l’API `/api/v1/connectors`.
 
+## Documentation technique
+
+Voir la [référence API et webhooks](docs/api-webhooks.md) : endpoints, authentification, payloads, événements disponibles, exemples cURL et codes d’erreur.
+
 ## Fonctionnalités
 
 - Liste paginée des demandes de voyage, détail et conseiller attribué.
@@ -13,8 +17,6 @@ Mini-client web partenaire dans un projet indépendant. Interface française, ad
 - Journal des 100 derniers événements de l’environnement, avec rattachement au dossier et payload consultable.
 - Mode démo : dossiers fictifs persistants, attribution, devis, propositions, messages et simulation des quatre événements.
 - Configuration de la connexion dans l’interface ; test de connexion en lecture seule.
-
-Les dates, paramètres et chemins sont basés sur le dépôt `bynativ/mynativ.bynativ.com`, branche `develop`, consulté le 18 septembre 2026. La version déployée de myNativ peut différer.
 
 ## Architecture
 
