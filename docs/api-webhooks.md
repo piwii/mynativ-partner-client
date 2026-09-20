@@ -30,6 +30,7 @@ Les chemins suivants sont relatifs à `/api/partner` dans Partner Desk et à `/a
 | PUT | `/travel-requests/{commercial_id}/abandon` | JSON `reason_id`, `reason_description` | Abandon du dossier |
 | PUT | `/travel-requests/{commercial_id}/quotations/{quotation}/toggle` | Aucun corps | Inversion du champ `active` du devis |
 | PUT | `/travel-requests/{commercial_id}` | JSON `user_id` | Attribution d’un conseiller |
+| GET | `/messages/templates` | — | Modèles de messages du partenaire |
 | GET | `/travel-requests/{commercial_id}/messages` | — | Historique des messages |
 | POST | `/travel-requests/{commercial_id}/messages` | JSON `consultant_id`, `message` | Message créé |
 | GET | `/travel-requests/{commercial_id}/quotations` | — | Liste des devis |
@@ -56,6 +57,8 @@ En mode réel, la liste transmet toujours `page=<page>&per_page=20&sort=-created
   "message": "Bonjour, voici les précisions pour votre voyage."
 }
 ```
+
+Le sélecteur de modèles charge `GET /messages/templates` (via `/api/partner/messages/templates`) et préremplit le texte avec `content`. Les champs `name`, `title` et `content` peuvent être des chaînes ou des traductions : le français est utilisé en priorité, sinon la première traduction non vide. Le texte reste modifiable avant envoi. Les variables éventuelles ne sont pas résolues par le client : elles doivent être personnalisées avant envoi. Le mode démo fournit deux modèles. Ce parcours est vérifié localement, sans appel au service distant.
 
 `consultant_id` doit être un entier JSON positif sûr. `message` doit être une chaîne de 3 caractères minimum après retrait des espaces aux extrémités, et de 20 000 caractères maximum avant retrait. La chaîne originale est envoyée, avec ses espaces. Les champs supplémentaires sont retirés.
 

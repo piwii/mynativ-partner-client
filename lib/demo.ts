@@ -20,6 +20,10 @@ export async function seed() { await db().batch(demoTrips.map(t => db().prepare(
 export async function demoRequest(method: string, path: string, body?: Record<string, unknown> | FormData) {
     await seed();
     if (path === 'statuses/abandoned/reasons') return { data: demoAbandonReasons };
+    if (path === 'messages/templates') return { data: [
+        { id: 1, name: { fr: 'Premier contact' }, content: { fr: 'Bonjour, merci pour votre demande de voyage ! Je serai votre interlocuteur pour préparer ce projet. Quelles sont vos envies et vos priorités ?' } },
+        { id: 2, name: { fr: 'Relance du devis' }, content: { fr: 'Bonjour, avez-vous pu consulter notre proposition de voyage ? Je reste disponible pour répondre à vos questions et adapter le programme à vos envies.' } }
+    ] };
     if (path === 'users')
         return { data: demoUsers };
     if (path === 'travel-requests')

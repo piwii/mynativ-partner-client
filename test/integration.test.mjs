@@ -12,6 +12,7 @@ const body=async r=>({status:r.status,data:await r.json()});
 test('API publique : configuration accessible sans session',async()=>{const r=await config.GET();assert.equal(r.status,200);assert.equal('email' in await r.json(),false);});
 test('parcours démo : liste, attribution, devis PDF, proposition, message, événements durables',async()=>{
  const c=await body(await config.GET());assert.equal(c.data.mode,'demo');assert.equal(c.data.hasApiToken,false);
+ const templates=await body(await req('GET','messages/templates'));assert.equal(templates.status,200);assert.ok(templates.data.data.length);assert.equal(typeof templates.data.data[0].content.fr,'string');
  const list=await body(await req('GET','travel-requests'));assert.equal(list.data.data.length,3);const id='MAR2026-0421';
  const assignment=await body(await req('PUT','travel-requests/'+id,json('/api/partner/travel-requests/'+id,'PUT',{user_id:11})));assert.equal(assignment.data.data.user_id,11);
  const form=new FormData();Object.entries({travel_name:'Séjour test',price:'2500',expiration_date:'2027-01-01 18:00:00',departure_date:'2027-02-01',return_date:'2027-02-10',pax_adults:'2',pax_kids:'0'}).forEach(([k,v])=>form.set(k,v));form.set('quotation',new File(['%PDF-1.4\n%%EOF'],'test.pdf',{type:'application/pdf'}));
@@ -50,6 +51,7 @@ test('webhooks réels : authentification, dédoublonnage, nouveau statut, sépar
 test('proxy réel : Bearer serveur, pagination, multipart intact, erreur Laravel conservée',async()=>{
  const original=globalThis.fetch;const calls=[];globalThis.fetch=async(url,init)=>{calls.push({url,init});if(String(url).endsWith('/messages'))return Response.json({message:'Données invalides',errors:{consultant_id:['Conseiller incorrect']}},{status:422});if(init.body instanceof ReadableStream){const f=await new Request(url,{method:'POST',headers:init.headers,body:init.body,duplex:'half'}).formData();assert.equal(f.get('quotation').name,'real.pdf');assert.equal(await f.get('quotation').text(),'%PDF-1.4\n%%EOF');}return Response.json({data:[]});};
  try{const r=await body(await req('GET','travel-requests'));assert.equal(r.status,200);assert.match(calls[0].url,/api\/v1\/connectors\/travel-requests\?page=1&per_page=20&sort=-created_at/);assert.equal(calls[0].init.headers.Authorization,'Bearer api-secret');assert.equal(calls[0].init.redirect,'manual');
+ await req('GET','messages/templates');assert.ok(calls.at(-1).url.endsWith('/messages/templates'));
  await req('GET','statuses/abandoned/reasons');assert.ok(calls.at(-1).url.endsWith('/statuses/abandoned/reasons'));
  const abandonPath='travel-requests/MAR2026-0421/abandon';
  assert.equal((await req('PUT',abandonPath,json('/api/partner/'+abandonPath,'PUT',{reason_id:2,reason_description:'Budget insuffisant',user_id:12}))).status,200);

@@ -62,3 +62,10 @@ export type ConfigView = {
     hasApiToken: boolean;
     hasWebhookToken: boolean;
 };
+
+export type MessageTemplate = {
+    id: number | string;
+    name: string | Record<string, string>;
+    title?: string | Record<string, string>;
+    content: string | Record<string, string>;
+};
