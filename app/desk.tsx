@@ -12,7 +12,31 @@ import { toast } from 'sonner';
 import type { Travel, User, Quotation, Message, MessageTemplate, Event, ConfigView } from '@/lib/types';
 import { unwrap } from '@/lib/contracts.mjs';
 const eventLabels: Record<string, string> = { 'new-request': 'Nouvelle demande', 'payment': 'Paiement reçu', 'proposition': 'Proposition mise à jour', 'message': 'Nouveau message' };
-const statusLabels: Record<string, string> = { NEW: 'Nouvelle demande', QUOTATION_SENT: 'Devis envoyé', REGISTERED: 'Inscrit', ABANDONED: 'Abandonné', DEFERRED: 'Reporté', VALIDATED: 'Validée', PENDING: 'En attente', REFUSED: 'Refusée' };
+const statusLabels: Record<string, string> = {
+    TO_DISPATCH: 'À attribuer',
+    NEW: 'Nouvelle demande',
+    WAITING_TRAVELER: 'En attente du voyageur',
+    QUOTATION_TO_DO: 'Devis à faire',
+    RELAUNCH_TRAVELER: 'Voyageur à relancer',
+    VALIDITY_DATE_EXPIRED: 'Date de validité expirée',
+    ABANDONED: 'Abandonné',
+    DEFERRED: 'Reporté',
+    WAITING_PAYMENTS: 'En attente de paiement',
+    MODIFICATION_IN_PROGRESS: 'Modification en cours',
+    TO_SOLD: 'À solder',
+    DEPARTURE: 'Départ à venir',
+    QUOTATION_TO_DO_AGAIN: 'Devis à refaire',
+    TRAVELING: 'Voyage en cours',
+    TERMINATED: 'Terminé',
+    CANCELLATION_REQUEST: 'Demande d’annulation',
+    CANCELED: 'Annulé',
+    POSTPONED: 'Voyage reporté',
+    QUOTATION_SENT: 'Devis envoyé',
+    REGISTERED: 'Inscrit',
+    VALIDATED: 'Validée',
+    PENDING: 'En attente',
+    REFUSED: 'Refusée',
+};
 const dates = (s?: string) => { if (!s)
     return 'Non renseigné'; const d = new Date(s.replace(' ', 'T')); return Number.isNaN(d.getTime()) ? s : d.toLocaleDateString('fr-FR'); };
 const euros = (n?: number) => n == null ? 'Non renseigné' : new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(Number(n));
