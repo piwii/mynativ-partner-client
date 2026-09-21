@@ -50,7 +50,7 @@ test('webhooks réels : authentification, dédoublonnage, nouveau statut, sépar
 });
 test('proxy réel : Bearer serveur, pagination, multipart intact, erreur Laravel conservée',async()=>{
  const original=globalThis.fetch;const calls=[];globalThis.fetch=async(url,init)=>{calls.push({url,init});if(String(url).endsWith('/messages'))return Response.json({message:'Données invalides',errors:{consultant_id:['Conseiller incorrect']}},{status:422});if(init.body instanceof ReadableStream){const f=await new Request(url,{method:'POST',headers:init.headers,body:init.body,duplex:'half'}).formData();assert.equal(f.get('quotation').name,'real.pdf');assert.equal(await f.get('quotation').text(),'%PDF-1.4\n%%EOF');}return Response.json({data:[]});};
- try{const r=await body(await req('GET','travel-requests'));assert.equal(r.status,200);assert.match(calls[0].url,/api\/v1\/connectors\/travel-requests\?page=1&per_page=20&sort=-created_at/);assert.equal(calls[0].init.headers.Authorization,'Bearer api-secret');assert.equal(calls[0].init.redirect,'manual');
+ try{const r=await body(await req('GET','travel-requests'));assert.equal(r.status,200);assert.match(calls[0].url,/api\/v1\/connectors\/travel-requests\?page=1&per_page=100&sort=-created_at/);assert.equal(calls[0].init.headers.Authorization,'Bearer api-secret');assert.equal(calls[0].init.redirect,'manual');
  await req('GET','messages/templates');assert.ok(calls.at(-1).url.endsWith('/messages/templates'));
  await req('GET','statuses/abandoned/reasons');assert.ok(calls.at(-1).url.endsWith('/statuses/abandoned/reasons'));
  const abandonPath='travel-requests/MAR2026-0421/abandon';
@@ -69,4 +69,14 @@ test('proxy réel : redirection refusée sans suivre la destination',async()=>{
  const original=globalThis.fetch;let calls=0;
  globalThis.fetch=async(url,init)=>{calls++;assert.equal(init.redirect,'manual');return new Response(null,{status:302,headers:{Location:'https://other.example'}});};
  try{const r=await body(await req('GET','users'));assert.equal(r.status,502);assert.match(r.data.message,/redirection/);assert.equal(calls,1);}finally{globalThis.fetch=original;}
+});
+
+test('proxy réel : transmet le délai de reprise sur une limitation 429', async () => {
+ const original = globalThis.fetch;
+ globalThis.fetch = async () => Response.json({message:'Too Many Attempts.'}, {status:429,headers:{'Retry-After':'42'}});
+ try {
+  const response = await req('GET','travel-requests');
+  assert.equal(response.status,429);
+  assert.equal(response.headers.get('Retry-After'),'42');
+ } finally { globalThis.fetch = original; }
 });

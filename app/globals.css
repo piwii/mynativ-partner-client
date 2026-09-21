@@ -101,3 +101,8 @@ body {margin:0;background:var(--background);color:var(--foreground);font-family:
 @media(max-width:720px){.form-grid{grid-template-columns:1fr}.modal{padding:22px!important}.settings-modal{max-width:calc(100% - 24px)!important}.quote-card{flex-wrap:wrap}.quote-price{margin-left:55px}.footer-right{max-width:60%;text-align:right}.detail-tabs button{font-size:13px}.message{max-width:100%}.form-actions{flex-direction:column}.form-actions>button{width:100%}}
 
 .detail-heading{flex-wrap:wrap;gap:16px}.detail-heading-actions{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+
+.status-group{border-top:1px solid var(--border)}.status-group>summary{display:flex;align-items:center;gap:8px;padding:16px 20px;font-size:13px;font-weight:600;cursor:pointer;list-style:none}.status-group>summary::-webkit-details-marker{display:none}.status-group>summary::before{content:'›';font-size:20px;line-height:1;transition:transform .15s}.status-group[open]>summary::before{transform:rotate(90deg)}.status-group>summary>.count{margin-left:auto;flex:none}.status-group>summary:focus-visible,.dossier:focus-visible{outline:2px solid var(--primary);outline-offset:-3px}.status-groups{max-height:70vh;overflow-y:auto}
+@media(max-width:720px){.status-groups{max-height:none}}
+
+.list-progress{padding:16px 20px;font-size:12px;line-height:1.6;color:#51675f;border-top:1px solid var(--border)}

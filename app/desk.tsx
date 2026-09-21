@@ -1,16 +1,16 @@
 "use client";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { ArrowUpRight, BriefcaseBusiness, RefreshCw, Settings2, Waypoints, Plus, MessageSquare, FileText, UserRound, CalendarDays, ChevronRight, ArrowLeft, Check, Copy, LockKeyhole, Send, CircleAlert, Upload, CreditCard, FlaskConical, ExternalLink } from 'lucide-react';
+import { ArrowUpRight, BriefcaseBusiness, RefreshCw, Settings2, Waypoints, Plus, MessageSquare, FileText, UserRound, CalendarDays, ChevronRight, Check, Copy, LockKeyhole, Send, CircleAlert, Upload, CreditCard, FlaskConical, ExternalLink } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Empty as EmptyContainer, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty';
-import { Pagination } from '@/components/ui/pagination';
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogHeader } from '@/components/ui/dialog';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import type { Travel, User, Quotation, Message, MessageTemplate, Event, ConfigView } from '@/lib/types';
 import { unwrap } from '@/lib/contracts.mjs';
+import { loadAllRequests } from '@/lib/request-list.mjs';
 const eventLabels: Record<string, string> = { 'new-request': 'Nouvelle demande', 'payment': 'Paiement reçu', 'proposition': 'Proposition mise à jour', 'message': 'Nouveau message' };
 const statusLabels: Record<string, string> = {
     TO_DISPATCH: 'À attribuer',
@@ -43,7 +43,7 @@ const euros = (n?: number) => n == null ? 'Non renseigné' : new Intl.NumberForm
 const person = (t: Travel) => [t.main_traveler?.firstname, t.main_traveler?.lastname].filter(Boolean).join(' ') || t.commercial_id;
 const pathOf = (id: string, suffix = '') => '/api/partner/travel-requests/' + encodeURIComponent(id) + suffix;
 class HttpError extends Error {
-    constructor(public status: number, message: string) { super(message); }
+    constructor(public status: number, message: string, public retryAfterMs = 60000) { super(message); }
 }
 async function request(url: string, options: RequestInit = {}) { const r = await fetch(url, { ...options, cache: 'no-store' }); let value; try {
     value = await r.json();
@@ -52,7 +52,9 @@ catch {
     throw new Error('Réponse inattendue du serveur.');
 } if (!r.ok) {
     const fields = value.errors ? Object.values(value.errors).flat().join(' ') : '';
-    throw new HttpError(r.status, fields || value.message || 'La requête a échoué.');
+    const retry = r.headers.get('Retry-After');
+    const retryMs = retry && /^\d+$/.test(retry) ? Number(retry) * 1000 : retry ? Date.parse(retry) - Date.now() : 60000;
+    throw new HttpError(r.status, r.status === 429 ? 'myNativ reçoit trop de requêtes. Veuillez réessayer dans une minute.' : fields || value.message || 'La requête a échoué.', Number.isFinite(retryMs) ? Math.max(1000, retryMs) : 60000);
 } return value; }
 const jsonBody = (value: unknown, method = 'POST') => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
 function Empty({ icon = <FileText />, title, children }: {
@@ -84,7 +86,7 @@ function templateText(value: string | Record<string, string> | undefined) {
 export default function Desk() {
     const [config, setConfig] = useState<ConfigView | null>(null), [session, setSession] = useState<'loading' | 'ready' | 'error'>('loading');
     const [trips, setTrips] = useState<Travel[]>([]), [users, setUsers] = useState<User[]>([]), [selected, setSelected] = useState(''), [trip, setTrip] = useState<Travel | null>(null), [quotes, setQuotes] = useState<Quotation[]>([]), [messages, setMessages] = useState<Message[]>([]), [events, setEvents] = useState<Event[]>([]);
-    const [tab, setTab] = useState('overview'), [modal, setModal] = useState(''), [busy, setBusy] = useState(false), [loading, setLoading] = useState(false), [detailLoading, setDetailLoading] = useState(false), [error, setError] = useState(''), [formError, setFormError] = useState(''), [resourceErrors, setResourceErrors] = useState<Record<string, string>>({}), [page, setPage] = useState(1), [lastPage, setLastPage] = useState(1);
+    const [tab, setTab] = useState('overview'), [modal, setModal] = useState(''), [busy, setBusy] = useState(false), [loading, setLoading] = useState(false), [detailLoading, setDetailLoading] = useState(false), [error, setError] = useState(''), [formError, setFormError] = useState(''), [resourceErrors, setResourceErrors] = useState<Record<string, string>>({});
     const [mode, setMode] = useState('demo'), [base, setBase] = useState('https://preprod.mynativ.app'), [priceMode, setPriceMode] = useState('modification'), [consultant, setConsultant] = useState(''), [draft, setDraft] = useState(''), [eventType, setEventType] = useState('new-request');
     const [reasons, setReasons] = useState<{ id: number; label: string }[]>([]), [reason, setReason] = useState(''), [reasonsLoading, setReasonsLoading] = useState(false);
     const [templates, setTemplates] = useState<MessageTemplate[]>([]), [template, setTemplate] = useState(''), [templatesLoading, setTemplatesLoading] = useState(false), [templatesError, setTemplatesError] = useState(''), [templatesRetry, setTemplatesRetry] = useState(0);
@@ -92,9 +94,33 @@ export default function Desk() {
     selectedRef.current = selected;
     const notifyError = (e: unknown) => { const text = e instanceof Error ? e.message : 'Une erreur est survenue.'; toast.error(text); return text; };
     async function loadConfig() { const c = await request('/api/config'); setConfig(c); setMode(c.mode); setBase(c.baseUrl); setSession('ready'); return c; }
-    async function loadList(p = page) { const results = await Promise.allSettled([request('/api/partner/travel-requests?page=' + p), request('/api/partner/users')]); if (results[0].status === 'rejected')
-        throw results[0].reason; const r = results[0].value, items = unwrap(r); if (!Array.isArray(items))
-        throw new Error('Format de liste myNativ inattendu.'); setTrips(items); setPage(r.meta?.current_page ?? p); setLastPage(r.meta?.last_page ?? p); setSelected(prev => items.some((t: Travel) => t.commercial_id === prev) ? prev : items[0]?.commercial_id ?? ''); if (results[1].status === 'fulfilled') {
+    const listFlight = useRef<Promise<void> | null>(null);
+    const [listProgress, setListProgress] = useState('');
+    async function loadList() {
+        if (listFlight.current) return listFlight.current;
+        setLoading(true);
+        setListProgress('Chargement des demandes…');
+        const pending = fetchList();
+        listFlight.current = pending;
+        try { await pending; setListProgress(''); }
+        catch (e) { setListProgress('Chargement incomplet. Les dossiers déjà affichés restent consultables. Cliquez sur Actualiser pour réessayer.'); throw e; }
+        finally { if (listFlight.current === pending) { listFlight.current = null; setLoading(false); } }
+    }
+    async function fetchList() { const results = await Promise.allSettled([loadAllRequests(request, undefined, {
+        onProgress: (items: Travel[], page: number, lastPage: number) => {
+            // Preserve existing dossiers while refreshing; reconcile removals only on completion.
+            setTrips(previous => [...new Map([...previous, ...items].map(item => [item.commercial_id, item])).values()]);
+            setSelected(previous => previous || items[0]?.commercial_id || '');
+            setListProgress(`${items.length} demandes chargées · ${page} / ${lastPage} lots reçus`);
+        },
+        onWait: (ms: number) => setListProgress(`Limite temporaire de myNativ : reprise automatique dans ${Math.ceil(ms / 1000)} secondes. Les dossiers chargés restent consultables.`),
+    }), request('/api/partner/users').then(value => {
+        const items = unwrap(value);
+        setUsers(Array.isArray(items) ? items : []);
+        return value;
+    })]); if (results[0].status === 'rejected')
+        throw results[0].reason; const items: Travel[] = results[0].value;
+        setTrips(items); setSelected(prev => items.some(t => t.commercial_id === prev) ? prev : items[0]?.commercial_id ?? ''); if (results[1].status === 'fulfilled') {
         const u = unwrap(results[1].value);
         setUsers(Array.isArray(u) ? u : []);
     }
@@ -139,8 +165,8 @@ export default function Desk() {
         await loadConfig();
         if (!active)
             return;
-        await loadList(1);
-        await loadEvents();
+        try { await loadList(); await loadEvents(); }
+        catch (e) { if (active) setError(e instanceof Error ? e.message : 'Chargement indisponible.'); }
     }
     catch (e) {
         if (!active)
@@ -165,7 +191,7 @@ export default function Desk() {
     useEffect(() => { if (trip)
         setConsultant(trip.user_id ? String(trip.user_id) : ''); }, [trip?.commercial_id, trip?.user_id]);
     useEffect(() => { if (session !== 'ready')
-        return; const timer = setInterval(async () => { if (document.hidden)
+        return; const timer = setInterval(async () => { if (document.hidden || listFlight.current)
         return; try {
         const list = await loadEvents();
         const head = list[0]?.id ?? '';
@@ -179,17 +205,17 @@ export default function Desk() {
     }
     catch {
         setResourceErrors(v => ({ ...v, events: 'Actualisation des événements interrompue. Cliquez sur Actualiser.' }));
-    } }, 15000); return () => clearInterval(timer); }, [session, page, config?.mode]);
+    } }, 15000); return () => clearInterval(timer); }, [session, config?.mode]);
     useEffect(() => { const context = (document as unknown as {
         modelContext?: {
             registerTool: (tool: unknown, options: unknown) => Promise<void> | void;
         };
     }).modelContext; if (!context)
         return; const life = new AbortController(); try {
-        Promise.resolve(context.registerTool({ name: 'list_partner_travel_requests', title: 'Lire les dossiers affichés', description: 'Retourne les dossiers de la page courante dans Partner Desk, sans modifier myNativ.', inputSchema: { type: 'object', properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true, untrustedContentHint: true }, execute: async (input: Record<string, unknown>) => { if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).length)
-                throw new Error('Cette action n’accepte aucun paramètre.'); return { mode: config?.mode, page, dossiers: trips.map(t => ({ commercial_id: t.commercial_id, voyageur: person(t), status: t.status, user_id: t.user_id })) }; } }, { signal: life.signal })).catch(() => { });
+        Promise.resolve(context.registerTool({ name: 'list_partner_travel_requests', title: 'Lire les dossiers affichés', description: 'Retourne les dossiers regroupés par statut dans Partner Desk, sans modifier myNativ.', inputSchema: { type: 'object', properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true, untrustedContentHint: true }, execute: async (input: Record<string, unknown>) => { if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).length)
+                throw new Error('Cette action n’accepte aucun paramètre.'); return { mode: config?.mode, dossiers: trips.map(t => ({ commercial_id: t.commercial_id, voyageur: person(t), status: t.status, user_id: t.user_id })) }; } }, { signal: life.signal })).catch(() => { });
     }
-    catch { } return () => life.abort(); }, [trips, page, config?.mode]);
+    catch { } return () => life.abort(); }, [trips, config?.mode]);
     async function openAbandon() {
         open('abandon'); setReason(''); setReasons([]); setReasonsLoading(true);
         try {
@@ -263,10 +289,9 @@ export default function Desk() {
         setEvents([]);
         setQuotes([]);
         setMessages([]);
-        setPage(1);
         setModal('');
         toast.success('Connexion enregistrée.');
-        await loadList(1);
+        await loadList();
         await loadEvents();
     }
     catch (e) {
@@ -287,6 +312,17 @@ export default function Desk() {
     finally {
         setBusy(false);
     } }
+    const grouped = new Map<string, Travel[]>();
+    for (const item of trips) {
+        const status = item.status || '';
+        if (!grouped.has(status)) grouped.set(status, []);
+        grouped.get(status)!.push(item);
+    }
+    const statusOrder = Object.keys(statusLabels);
+    const groups = [...grouped.entries()].sort(([a], [b]) => {
+        const rank = (status: string) => statusOrder.includes(status) ? statusOrder.indexOf(status) : statusOrder.length;
+        return rank(a) - rank(b) || a.localeCompare(b);
+    });
     const related = events.filter(e => e.commercial_id === trip?.commercial_id || (e.travel_id != null && Number(e.travel_id) === trip?.id));
     const unpaid = trip?.is_deposit_paid;
     const user = users.find(u => u.id === trip?.user_id);
@@ -295,23 +331,7 @@ export default function Desk() {
  <div className={'demo-banner ' + (config?.mode === 'live' ? 'live-banner' : '')}><span>{config?.mode === 'demo' ? 'ENVIRONNEMENT DÉMO' : config?.baseUrl.includes('preprod') ? 'MYNATIV · PRÉPRODUCTION' : 'MYNATIV · PRODUCTION'}</span>{config?.mode === 'demo' ? 'Des dossiers fictifs pour essayer chaque parcours.' : 'Les actions sont transmises à votre environnement myNativ.'}<span className="banner-end">{config?.mode === 'demo' ? 'Aucune action sur myNativ' : 'Connexion serveur sécurisée'} <LockKeyhole size={14}/></span></div>
  <section className="heading"><div><p className="eyebrow">DU PREMIER CONTACT AU DÉPART</p><h1>Vos voyages, au même endroit.</h1><p className="muted">Suivez les demandes et faites avancer chaque dossier.</p></div><Button variant="outline" onClick={refresh} disabled={loading}><RefreshCw size={16} className={loading ? 'spin' : ''}/> Actualiser</Button></section>
  {error && <div role="alert" className="error-box"><CircleAlert size={18}/>{error}</div>}
- <div className="workspace-grid"><aside className="dossiers"><div className="list-heading"><h2><BriefcaseBusiness size={18}/> Dossiers</h2><span className="count">{trips.length}</span></div>{trips.map(t => <button key={t.commercial_id} onClick={() => { setSelected(t.commercial_id); setFormError(''); }} className={'dossier ' + (t.commercial_id === selected ? 'selected' : '')} aria-pressed={t.commercial_id === selected}><span className="dossier-id">{t.commercial_id} <ChevronRight size={15}/></span><strong>{person(t)}</strong><span>{dates(t.departure_date)} · {Number(t.pax_adults ?? 0) + Number(t.pax_kids ?? 0)} voyageurs</span><small className={'badge ' + (!t.user_id ? 'amber' : '')}>{t.status === 'ABANDONED' ? 'Abandonné' : !t.user_id ? 'À attribuer' : t.is_deposit_paid ? 'Acompte reçu' : statusLabels[t.status ?? ''] ?? t.status ?? 'En cours'}</small></button>)}{!trips.length && <p className="list-foot">Aucun dossier dans cet environnement.</p>}{lastPage > 1 && <Pagination className="pagination" aria-label="Pages de dossiers"><Button variant="ghost" size="icon" aria-label="Page précédente" disabled={page <= 1 || loading} onClick={async () => { setLoading(true); try {
-            await loadList(page - 1);
-        }
-        catch (e) {
-            notifyError(e);
-        }
-        finally {
-            setLoading(false);
-        } }}><ArrowLeft size={16}/></Button><span>{page} / {lastPage}</span><Button variant="ghost" size="icon" aria-label="Page suivante" disabled={page >= lastPage || loading} onClick={async () => { setLoading(true); try {
-            await loadList(page + 1);
-        }
-        catch (e) {
-            notifyError(e);
-        }
-        finally {
-            setLoading(false);
-        } }}><ChevronRight size={16}/></Button></Pagination>}<p className="list-foot">Les nouvelles demandes arrivent depuis myNativ.<br />Les événements sont actualisés toutes les 15 secondes.</p></aside>
+ <div className="workspace-grid"><aside className="dossiers"><div className="list-heading"><h2><BriefcaseBusiness size={18}/> Dossiers</h2><span className="count">{trips.length}</span></div><div className="status-groups">{groups.map(([status, items]) => <details className="status-group" key={status}><summary><span>{statusLabels[status] ?? (status || 'Sans statut')}</span><span className="count">{items.length}</span></summary>{items.map(t => <button key={t.commercial_id} onClick={() => { setSelected(t.commercial_id); setFormError(''); }} className={'dossier ' + (t.commercial_id === selected ? 'selected' : '')} aria-pressed={t.commercial_id === selected}><span className="dossier-id">{t.commercial_id} <ChevronRight size={15}/></span><strong>{person(t)}</strong><span>{dates(t.departure_date)} · {Number(t.pax_adults ?? 0) + Number(t.pax_kids ?? 0)} voyageurs</span><small className={'badge ' + (!t.user_id ? 'amber' : '')}>{t.is_deposit_paid ? 'Acompte reçu' : !t.user_id ? 'Sans conseiller' : 'Attribué'}</small></button>)}</details>)}</div>{listProgress && <p className="list-progress" role="status">{listProgress}</p>}{!trips.length && !loading && !listProgress && <p className="list-progress">Aucun dossier dans cet environnement.</p>}<p className="list-foot">Les nouvelles demandes arrivent depuis myNativ.<br />Les événements sont actualisés toutes les 15 secondes.</p></aside>
  <section className="detail" aria-busy={detailLoading}>{!trip || trip.commercial_id !== selected ? <Empty title={detailLoading ? 'Chargement du dossier…' : resourceErrors.detail ? 'Dossier indisponible' : 'Sélectionnez un dossier'}>{resourceErrors.detail ?? 'Les informations du voyage apparaîtront ici.'}</Empty> : <><div className="detail-heading"><div><p className="eyebrow">{trip.commercial_id} <span className={'badge ' + (!trip.user_id ? 'amber' : '')}>{trip.status === 'ABANDONED' ? 'Abandonné' : !trip.user_id ? 'À attribuer' : statusLabels[trip.status ?? ''] ?? trip.status ?? 'En cours'}</span>{unpaid && <span className="badge"><Check size={12}/> Acompte reçu</span>}</p><h2>{person(trip)}</h2><p className="muted">{trip.main_traveler?.email ?? 'Demande de voyage'}</p></div><div className="detail-heading-actions"><div className="avatar">{(trip.main_traveler?.firstname?.[0] ?? '') + (trip.main_traveler?.lastname?.[0] ?? '')}</div><Button variant="outline" disabled={busy || trip.status === 'ABANDONED'} onClick={openAbandon}>Abandonner la demande</Button></div></div><div className="trip-facts"><div><CalendarDays /><span>Départ souhaité<strong>{dates(trip.departure_date)}</strong></span></div><div><UserRound /><span>Voyageurs<strong>{trip.pax_adults ?? '—'} adultes{trip.pax_kids ? `, ${trip.pax_kids} enfants` : ''}</strong></span></div><div><FileText /><span>Budget indicatif<strong>{euros(trip.budget)}</strong></span></div></div>
  <Tabs value={tab} onValueChange={v => { setTab(v); setFormError(''); }}><TabsList variant="line" className="detail-tabs"><TabsTrigger value="overview">Vue d’ensemble</TabsTrigger><TabsTrigger value="quotes">Devis <span className="tab-count">{quotes.length}</span></TabsTrigger><TabsTrigger value="messages">Messages <span className="tab-count">{messages.length}</span></TabsTrigger><TabsTrigger value="events">Événements</TabsTrigger></TabsList>
  <TabsContent value="overview"><div className="action-card"><span className="action-icon"><UserRound /></span><div><h3>{user ? user.fullname : trip.user_id ? 'Conseiller #' + trip.user_id : 'Un conseiller pour ce voyage'}</h3><p>{trip.user_id ? 'Conseiller attribué à ce dossier.' : 'Attribuez ce dossier pour commencer l’accompagnement.'}</p></div><Button onClick={() => open('assign')} disabled={!users.length}>{trip.user_id ? 'Réattribuer' : 'Attribuer'} <ArrowUpRight size={16}/></Button></div><div className="section-title"><h3>Le projet de voyage</h3><span className="eyebrow">DEMANDE CLIENT</span></div><p className="travel-note">{trip.travel_detail || 'Aucune précision complémentaire pour ce dossier.'}</p><div className="next-actions"><button onClick={() => open('quote')}><FileText /><strong>Préparer un devis</strong><span>Partagez votre proposition de voyage.</span><Plus size={17}/></button><button onClick={() => setTab('messages')}><MessageSquare /><strong>Échanger avec le client</strong><span>Retrouvez toute la conversation.</span><ArrowUpRight size={17}/></button></div></TabsContent>

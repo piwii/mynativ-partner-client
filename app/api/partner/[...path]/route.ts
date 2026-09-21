@@ -46,7 +46,7 @@ async function handle(r: Request, { params }: {
             if (!Number.isSafeInteger(page) || page < 1)
                 throw new ApiError(422, 'Page invalide.');
             qs.set('page', String(page));
-            qs.set('per_page', '20');
+            qs.set('per_page', '100');
             qs.set('sort', '-created_at');
         }
         const response = await upstream(config, path + (qs.size ? '?' + qs : ''), { method: r.method, headers, body });
@@ -58,7 +58,10 @@ async function handle(r: Request, { params }: {
         catch {
             throw new ApiError(502, 'myNativ a renvoyé une réponse inattendue (HTTP ' + response.status + ').');
         }
-        return json(result, response.status);
+        const outgoing = json(result, response.status);
+        const retryAfter = response.headers.get('Retry-After');
+        if (retryAfter) outgoing.headers.set('Retry-After', retryAfter);
+        return outgoing;
     }
     catch (e) {
         return failure(e);
